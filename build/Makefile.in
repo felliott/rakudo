@@ -222,6 +222,7 @@ CORE_SOURCES = \
   src/core/WhateverCode.pm \
   src/core/Routine.pm \
   src/core/Regex.pm \
+  src/core/FlipFlop.pm \
   src/core/Junction.pm \
   src/core/Grammar.pm \
   src/core/system.pm \

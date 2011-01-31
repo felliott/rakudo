@@ -1986,6 +1986,16 @@ token infix:sym<^..>  { <sym> <O('%structural')> }
 token infix:sym<..^>  { <sym> <O('%structural')> }
 token infix:sym<^..^> { <sym> <O('%structural')> }
 
+token infix:sym<ff>   { <sym> <O('%conditional')> }
+token infix:sym<^ff>  { <sym> <O('%conditional')> }
+token infix:sym<ff^>  { <sym> <O('%conditional')> }
+token infix:sym<^ff^> { <sym> <O('%conditional')> }
+
+token infix:sym<fff>   { <sym> <O('%conditional')> }
+token infix:sym<^fff>  { <sym> <O('%conditional')> }
+token infix:sym<fff^>  { <sym> <O('%conditional')> }
+token infix:sym<^fff^> { <sym> <O('%conditional')> }
+
 token infix:sym<leg>  { <sym> >> <O('%structural')> }
 token infix:sym<cmp>  { <sym> >> <O('%structural')> }
 token infix:sym«<=>»  { <sym> <O('%structural')> }
