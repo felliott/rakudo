@@ -29,25 +29,35 @@ class FlipFlop {
         # flip?
         if (!$.state) {
             if ($topic.match($.lhs)) {
-                $.state  = $.state + 1;
+                $.state++;
                 $flipped = Bool::True;
-                $retval  = $.exclude_first ?? Bool::False !! $.state;
             }
-            else {
-                $retval = Bool::False;
-            }
+
+            # if lhs doesn't match, $.state is 0 anyway
+            $retval  = $.exclude_first ?? 0 !! $.state;
         }
+
 
         # flop?
         if ($.state && (!$.sedlike || !$flipped)) {
             if ($topic.match($.rhs)) {
-                $retval = ($flipped && $.exclude_first) || $.exclude_last
-                    ?? Bool::False !! ($flipped ?? $.state !! $.state + 1);
+                if ($flipped) {
+                    $retval = $.exclude_first || $.exclude_last
+                        ?? Bool::False !! $.state;
+                }
+                else {
+                    $retval = $.exclude_last ?? Bool::False !! ++$.state;
+                }
+
                 $.state = 0;
             }
             else {
-                $.state = $.state + 1 if (!$flipped);
-                $retval = ($flipped && $.exclude_first) ?? Bool::False !! $.state;
+                if ($flipped) {
+                    $retval = $.exclude_first ?? Bool::False !! $.state;
+                }
+                else {
+                    $retval = ++$.state;
+                }
             }
         }
 
