@@ -16,12 +16,6 @@ class FlipFlop {
         self.bless(*, :$lhs, :$rhs, :$exclude_first, :$exclude_last, :$sedlike);
     }
 
-    # multi method ACCEPTS($topic) {
-    #     my $match = $topic.match(self);
-    #     pir::store_dynamic_lex__vSP('$/', $match);
-    #     $match
-    # }
-
     our multi method truth($topic) {
         my $retval;
         my $flipped = Bool::False;
@@ -64,6 +58,11 @@ class FlipFlop {
         return $retval || '';
     }
 
+
+    multi method ACCEPTS($topic) {
+        self.truth($topic);
+    }
+
     multi method Bool() {
         my $topic = pir::find_dynamic_lex__pS('$_');
         self.truth($topic).Bool();
@@ -72,6 +71,11 @@ class FlipFlop {
     multi method Str() {
         my $topic = pir::find_dynamic_lex__pS('$_');
         self.truth($topic).Str();
+    }
+
+    multi method Int() {
+        my $topic = pir::find_dynamic_lex__pS('$_');
+        self.truth($topic).Int();
     }
 }
 
