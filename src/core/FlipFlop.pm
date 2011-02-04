@@ -58,6 +58,11 @@ class FlipFlop {
         my $topic = pir::find_dynamic_lex__pS('$_');
         self.truth($topic).Bool();
     }
+
+    multi method Str() {
+        my $topic = pir::find_dynamic_lex__pS('$_');
+        self.truth($topic).Str();
+    }
 }
 
 
