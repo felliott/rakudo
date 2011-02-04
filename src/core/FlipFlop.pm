@@ -58,6 +58,15 @@ class FlipFlop {
         return $retval || '';
     }
 
+    our Str multi method perl() {
+        ( $.lhs.perl,
+          ('^' if $.exclude_first),
+          '..',
+          ('^' if $.exclude_last),
+          $.rhs.perl
+        ).join('');
+    }
+
 
     multi method ACCEPTS($topic) {
         self.truth($topic);
