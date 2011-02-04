@@ -22,7 +22,7 @@ class FlipFlop {
     #     $match
     # }
 
-    our Bool multi method truth($topic) {
+    our multi method truth($topic) {
         my $retval;
         my $flipped = Bool::False;
 
