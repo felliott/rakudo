@@ -6,12 +6,12 @@ class FlipFlop {
     has $.exclude_last  = Bool::False;
     has $.sedlike       = Bool::False;
 
-    has $.is_true is rw = Bool::False;
+    has $.state is rw   = 0;
 
     multi method new($lhs, $rhs,
                      Bool :$exclude_first = Bool::False,
                      Bool :$exclude_last  = Bool::False,
-                     Bool :$sedlike        = Bool::False) {
+                     Bool :$sedlike       = Bool::False) {
         # say "    ...building new FlipFlop";
         self.bless(*, :$lhs, :$rhs, :$exclude_first, :$exclude_last, :$sedlike);
     }
@@ -27,11 +27,11 @@ class FlipFlop {
         my $flipped = Bool::False;
 
         # flip?
-        if (!$.is_true) {
+        if (!$.state) {
             if ($topic.match($.lhs)) {
-                $.is_true = Bool::True;
-                $flipped  = Bool::True;
-                $retval   = $.exclude_first ?? Bool::False !! Bool::True;
+                $.state  = $.state + 1;
+                $flipped = Bool::True;
+                $retval  = $.exclude_first ?? Bool::False !! $.state;
             }
             else {
                 $retval = Bool::False;
@@ -39,18 +39,19 @@ class FlipFlop {
         }
 
         # flop?
-        if ($.is_true && (!$.sedlike || !$flipped)) {
+        if ($.state && (!$.sedlike || !$flipped)) {
             if ($topic.match($.rhs)) {
-                $.is_true = Bool::False;
                 $retval = ($flipped && $.exclude_first) || $.exclude_last
-                    ?? Bool::False !! Bool::True;
+                    ?? Bool::False !! ($flipped ?? $.state !! $.state + 1);
+                $.state = 0;
             }
             else {
-                $retval = ($flipped && $.exclude_first) ?? Bool::False !! Bool::True;
+                $.state = $.state + 1 if (!$flipped);
+                $retval = ($flipped && $.exclude_first) ?? Bool::False !! $.state;
             }
         }
 
-        return $retval;
+        return $retval || '';
     }
 
     multi method Bool() {
