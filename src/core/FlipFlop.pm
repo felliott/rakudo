@@ -158,7 +158,6 @@ sub __check_ff_cache($new_ff) {
         unless null $P0 goto lookup
         $P0 = new ['Hash']
         set_hll_global ['GLOBAL'], '%ff_cache', $P0
-        goto fetch
       lookup:
         $P2 = find_lex '$lookup'
         $P1 = $P0[$P2]
