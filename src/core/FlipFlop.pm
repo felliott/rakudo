@@ -61,7 +61,7 @@ class FlipFlop {
     our Str multi method perl() {
         ( $.lhs.perl,
           ('^' if $.exclude_first),
-          '..',
+          ($.sedlike ?? 'fff' !! 'ff'),
           ('^' if $.exclude_last),
           $.rhs.perl
         ).join('');
