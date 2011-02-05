@@ -150,9 +150,8 @@ sub __check_ff_cache($new_ff) {
 
     my $lookup = callframe(2).file ~ ':' ~ callframe(2).line;
 
-    # print "  Checking ff_cache for $lookup... ";
     my $ff;
-    my $found = Q:PIR {
+    Q:PIR {
       fetch:
         $P0 = get_hll_global ['GLOBAL'], '%ff_cache'
         unless null $P0 goto lookup
@@ -161,19 +160,10 @@ sub __check_ff_cache($new_ff) {
       lookup:
         $P2 = find_lex '$lookup'
         $P1 = $P0[$P2]
-        if null $P1 goto nope
+        if null $P1 goto done
         store_lex '$ff', $P1
-        $I0 = 1
-        goto done
-      nope:
-        $I0 = 0
       done:
-        $P3 = new ['Int']
-        $P3 = $I0
-        %r = $P3
     };
-
-    # say $found ?? " Found it!" !! "  not found.";
 
     $ff = $ff // $new_ff.();
     Q:PIR {
