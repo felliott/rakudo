@@ -2347,6 +2347,11 @@ method EXPR($/, $key?) {
         make make_feed($/);
         return 1;
     }
+    elsif $sym eq 'ff'  || $sym eq '^ff'  || $sym eq 'ff^'  || $sym eq '^ff^'
+       || $sym eq 'fff' || $sym eq '^fff' || $sym eq 'fff^' || $sym eq '^fff^' {
+        make make_flipflop($/);
+        return 1;
+    }
     elsif $sym eq '~~' {
         make make_smartmatch($/, 0);
         return 1;
@@ -2452,6 +2457,138 @@ sub make_feed($/) {
 
     return $result;
 }
+
+sub make_flipflop($/) {
+
+    my $excl_lhs  := 0;
+    my $excl_rhs  := 0;
+    my $sedlike   := 0;
+    if ($/<infix><sym> eq '^ff' || $/<infix><sym> eq '^ff^'
+            || $/<infix><sym> eq '^fff' || $/<infix><sym> eq '^fff^') {
+        $excl_lhs := 1;
+    }
+    if ($/<infix><sym> eq 'ff^' || $/<infix><sym> eq '^ff^'
+            || $/<infix><sym> eq 'fff^' || $/<infix><sym> eq '^fff^') {
+        $excl_rhs := 1;
+    }
+    if ($/<infix><sym> eq 'fff' || $/<infix><sym> eq '^fff'
+            || $/<infix><sym> eq 'fff^' || $/<infix><sym> eq '^fff^') {
+        $sedlike := 1;
+    }
+
+
+    my $lhspast   := $/[0].ast;
+    my $rhspast   := $/[1].ast;
+    my $state_var := $lhspast.unique('ff_state');
+
+    # define state-saving pir
+    my $label := $lhspast.unique;
+    my $get_state := "    \$P0 = get_hll_global ['GLOBAL'], '$state_var'
+    unless null \$P0 goto ff_state_assign_$label
+    new \$P0, 'Perl6Scalar'
+    setprop \$P0, 'rw', true
+    new \$P1, 'Int'
+    assign \$P1, 0
+    \"&infix:<=>\"(\$P0, \$P1)
+    set_hll_global ['GLOBAL'], '$state_var', \$P0
+  ff_state_assign_$label:
+    %r = \$P0";
+
+    my $state_var_init := PAST::Op.new( :inline($get_state) );
+    $state_var_init := PAST::Op.new( $state_var_init, 'rw', $TRUE, :pirop('setprop') );
+
+    my $result_var := $lhspast.unique('ff_result');
+    my $result_var_init := PAST::Op.new( :inline("    %r = new ['Perl6Scalar']") );
+    $result_var_init := PAST::Op.new( $result_var_init, 'rw', $TRUE, :pirop('setprop') );
+
+    my $flipped_var := $lhspast.unique('ff_flipped');
+
+    # decide if we can flip & flop on same line
+    my $stop_flopping := PAST::Val.new( :value(0) );
+    if $sedlike {
+        $stop_flopping := PAST::Var.new( :name($flipped_var), :scope<register> );
+    }
+
+    # what do we return on flop?
+    my $flop_retval;
+    if $excl_rhs {
+        $flop_retval := PAST::Val.new( :value(0) );
+    }
+    else {
+        if $excl_lhs {
+            $flop_retval := PAST::Op.new( :pasttype<if>,
+                                PAST::Var.new( :name($flipped_var), :scope<register> ),
+                                PAST::Val.new( :value(0) ),
+                                PAST::Var.new( :name($state_var),  :scope<lexical> ), );
+        }
+        else {
+            $flop_retval := PAST::Var.new( :name($state_var), :scope<lexical> );
+        }
+    }
+
+    my $lhsinc := ($excl_lhs) ?? '&postfix:<++>' !! '&prefix:<++>';
+    my $flip := PAST::Op.new( :name('&infix:<=>'),
+                    PAST::Var.new(:name($result_var), :scope<lexical>),
+                    PAST::Op.new(:pasttype<if>,
+                        $lhspast,
+                        PAST::Stmts.new(
+                            PAST::Op.new( :pasttype<bind>,
+                                PAST::Var.new( :name($flipped_var), :scope<register> ),
+                                PAST::Val.new( :value(1) ),),
+                            PAST::Op.new(:name($lhsinc),
+                                PAST::Var.new(:name($state_var), :scope<lexical>),),),
+                        PAST::Val.new( :value(0) ), ), );
+
+    my $flop := PAST::Stmts.new(
+                    PAST::Op.new(:pasttype<unless>,
+                        PAST::Var.new( :name($flipped_var), :scope<register> ),
+                            PAST::Op.new( :name('&infix:<=>'),
+                                PAST::Var.new(:name($result_var), :scope<lexical>),
+                                PAST::Op.new(:name('&prefix:<++>'),
+                                    PAST::Var.new(:name($state_var), :scope<lexical>),),),),
+                    PAST::Op.new(:pasttype<if>, $rhspast,
+                        PAST::Stmts.new(
+                            PAST::Op.new( :name('&infix:<=>'),
+                                PAST::Var.new(:name($result_var), :scope<lexical>),
+                                $flop_retval ),
+                            PAST::Op.new(:name('&infix:<=>'),
+                                   PAST::Var.new(:name($state_var), :scope<lexical>),
+                                   PAST::Val.new( :value(0) ) ),),),);
+
+    my $past := PAST::Stmts.new(
+
+        # declare and initialize our variables
+        PAST::Var.new( :name($state_var), :scope<lexical>, :isdecl(1),
+                       :viviself($state_var_init) ),
+        PAST::Var.new( :name($result_var), :scope<lexical>,
+                       :isdecl(1), :viviself($result_var_init) ),
+        PAST::Var.new( :name($flipped_var), :scope<register>, :isdecl(1) ),
+        PAST::Op.new( :pasttype<bind>,
+            PAST::Var.new( :name($flipped_var), :scope<register> ),
+            PAST::Val.new( :value(0) ),),
+
+        # flip
+        PAST::Op.new(:pasttype<unless>,
+            PAST::Var.new(:name($state_var), :scope<lexical>),
+            $flip),
+
+        # flop
+        PAST::Op.new(:pasttype<if>,
+            PAST::Var.new(:name($state_var), :scope<lexical>),
+            PAST::Op.new(:pasttype<unless>, $stop_flopping, $flop),),
+
+        # return
+        PAST::Var.new( :name($result_var), :scope(<lexical>) ),
+    );
+
+    # return empty string if retval is false
+    $past := PAST::Op.new(
+        :pasttype<unless>,
+        $past,
+        PAST::Val.new( :value('') ),
+    );
+}
+
 
 sub make_smartmatch($/, $negated) {
     my $lhs := $/[0].ast;
