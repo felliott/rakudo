@@ -1967,10 +1967,15 @@ token infix:sym<...^> { <sym>  <O('%list_infix')> }
 
 token infix:sym<?>    { <sym> {} <!before '?'> <?before <-[;]>*?':'> <.obs('?: for the conditional operator', '??!!')> <O('%conditional')> }
 
-token infix:sym<ff> { <sym> <.panic('Flip flip operators are not yet implemented')> }
-token infix:sym<^ff> { <sym> <.panic('Flip flip operators are not yet implemented')> }
-token infix:sym<ff^> { <sym> <.panic('Flip flip operators are not yet implemented')> }
-token infix:sym<^ff^> { <sym> <.panic('Flip flip operators are not yet implemented')> }
+token infix:sym<ff>   { <sym> <O('%conditional')> }
+token infix:sym<^ff>  { <sym> <O('%conditional')> }
+token infix:sym<ff^>  { <sym> <O('%conditional')> }
+token infix:sym<^ff^> { <sym> <O('%conditional')> }
+
+token infix:sym<fff>   { <sym> <O('%conditional')> }
+token infix:sym<^fff>  { <sym> <O('%conditional')> }
+token infix:sym<fff^>  { <sym> <O('%conditional')> }
+token infix:sym<^fff^> { <sym> <O('%conditional')> }
 
 token infix:sym<=> {
     <sym>

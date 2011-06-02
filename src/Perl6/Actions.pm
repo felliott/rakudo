@@ -2347,6 +2347,11 @@ method EXPR($/, $key?) {
         make make_feed($/);
         return 1;
     }
+    elsif $sym eq 'ff'  || $sym eq '^ff'  || $sym eq 'ff^'  || $sym eq '^ff^'
+       || $sym eq 'fff' || $sym eq '^fff' || $sym eq 'fff^' || $sym eq '^fff^' {
+        make make_flipflop($/);
+        return 1;
+    }
     elsif $sym eq '~~' {
         make make_smartmatch($/, 0);
         return 1;
@@ -2452,6 +2457,176 @@ sub make_feed($/) {
 
     return $result;
 }
+
+sub make_flipflop($/) {
+
+    my $exclude_first := 0;
+    my $exclude_last  := 0;
+    my $sedlike       := 0;
+    if ($/<infix><sym> eq '^ff' || $/<infix><sym> eq '^ff^'
+            || $/<infix><sym> eq '^fff' || $/<infix><sym> eq '^fff^') {
+        $exclude_first := 1;
+    }
+    if ($/<infix><sym> eq 'ff^' || $/<infix><sym> eq '^ff^'
+            || $/<infix><sym> eq 'fff^' || $/<infix><sym> eq '^fff^') {
+        $exclude_last := 1;
+    }
+    if ($/<infix><sym> eq 'fff' || $/<infix><sym> eq '^fff'
+            || $/<infix><sym> eq 'fff^' || $/<infix><sym> eq '^fff^') {
+        $sedlike := 1;
+    }
+
+
+    my $lhs := $/[0].ast;
+    my $rhs := $/[1].ast;
+    my $match_lhs := PAST::Op.new( :pasttype('call'), :name('&infix:<~~>'),
+        PAST::Var.new( :name('$_'), :scope('lexical') ),
+        $lhs
+    );
+    my $match_rhs := PAST::Op.new( :pasttype('call'), :name('&infix:<~~>'),
+        PAST::Var.new( :name('$_'), :scope('lexical') ),
+        $rhs
+    );
+
+    # get unique names for our variables
+    my $state_var   := $lhs.unique('ff_state');
+    my $result_var  := $lhs.unique('ff_result');
+    my $flipped_var := $lhs.unique('ff_flipped');
+
+    #increment and return state
+    my $inc_state := PAST::Stmts.new(
+        PAST::Op.new( :pirop('inc'),
+            PAST::Var.new( :name($state_var), :scope('lexical') )
+        ),
+        PAST::Var.new( :name($state_var), :scope('lexical') ),
+    );
+
+    my $exclude_first_retval;
+    if $exclude_first {
+        $exclude_first_retval := PAST::Val.new( :value(0) );
+    }
+    else {
+        $exclude_first_retval := PAST::Var.new( :name($state_var), :scope('lexical') );
+    }
+
+    my $stop_flop;
+    if $sedlike {
+        $stop_flop := PAST::Var.new( :name($flipped_var), :scope('register') );
+    }
+    else {
+        $stop_flop := PAST::Val.new( :value(0) )
+    }
+
+    my $rhs_match_flip;
+    my $rhs_match_noflip;
+    if $exclude_last {
+        $rhs_match_flip   := PAST::Val.new( :value(0) );
+        $rhs_match_noflip := PAST::Val.new( :value(0) );
+    }
+    else {
+        $rhs_match_flip   := $exclude_first_retval;
+        $rhs_match_noflip := $inc_state;
+    }
+
+
+    my $flip := PAST::Stmts.new(
+        PAST::Op.new( :pasttype('if'), $match_lhs, # $topic.match($lhs)
+            PAST::Stmts.new(
+                PAST::Op.new( :pirop('inc'),
+                    PAST::Var.new( :name($state_var), :scope('lexical') )
+                ),
+                PAST::Op.new(
+                    :pasttype('bind'),
+                    PAST::Var.new( :name($flipped_var), :scope('register') ),
+                    PAST::Val.new( :value(1) ),
+                ),
+            )
+        ),
+        PAST::Op.new( :pasttype('bind'),
+            PAST::Var.new( :name($result_var), :scope('lexical') ),
+            $exclude_first_retval
+        )
+    );
+
+    my $flop := PAST::Op.new(
+        :pasttype('if'), $match_rhs, # if $topic.match($.rhs)
+        PAST::Stmts.new(
+            PAST::Op.new( :pasttype('bind'),
+                PAST::Var.new( :name($result_var), :scope('lexical') ),
+                PAST::Op.new( :pasttype('if'),
+                    PAST::Var.new( :name($flipped_var), :scope('register') ),
+                    $rhs_match_flip,
+                    $rhs_match_noflip,
+                ),
+            ),
+            PAST::Op.new( :pasttype('bind'), # $.state = 0
+                PAST::Var.new( :name($state_var), :scope('lexical') ),
+                PAST::Val.new( :value(0) )
+            ),
+        ),
+        PAST::Op.new( :pasttype('unless'),
+            PAST::Var.new( :name($flipped_var), :scope('register') ),
+            PAST::Op.new( :pasttype('bind'), # no rhs match
+                PAST::Var.new( :name($result_var), :scope('lexical') ),
+                $inc_state,
+            ),
+        ),
+    );
+
+
+    # define state-saving pir
+    my $label := $lhs.unique;
+    my $get_state := "    %r = get_hll_global ['GLOBAL'], '$state_var'
+    unless null %r goto ff_state_assign_$label
+    new %r, 'Integer'
+    assign %r, 0
+    set_hll_global ['GLOBAL'], '$state_var', %r
+  ff_state_assign_$label:
+    %0 = %r";
+
+    my $set_state := "    set_hll_global ['GLOBAL'], '$state_var', %0";
+
+
+    PAST::Stmts.new(
+
+        # declare our variables
+        PAST::Op.new(
+            :pasttype('inline'),
+            :inline($get_state), # state_var exists
+            PAST::Var.new( :name($state_var), :scope('lexical'), :isdecl(1), :viviself(0) ),
+        ),
+        PAST::Var.new( :name($result_var),  :scope('lexical'), :isdecl(1) ),
+        PAST::Op.new(
+            :pasttype('bind'),
+            PAST::Var.new( :name($flipped_var), :scope('register'), :isdecl(1), :viviself(0) ),
+            PAST::Val.new( :value(0) ),
+        ),
+
+        # flip?
+        PAST::Op.new( :pasttype('unless'),
+            PAST::Var.new( :name($state_var), :scope('lexical') ),
+            $flip,
+        ),
+
+        # flop?
+        PAST::Op.new( :pasttype('if'),
+            PAST::Var.new( :name($state_var), :scope('lexical') ),
+            PAST::Op.new( :pasttype('unless'),
+                $stop_flop,
+                $flop,
+            ),
+        ),
+
+        # store state, set retval
+        PAST::Op.new( :inline($set_state), PAST::Var.new( :name($state_var), :scope('lexical') ) ),
+        PAST::Op.new( :pasttype('if'),
+            PAST::Var.new( :name($result_var), :scope('lexical') ),
+            PAST::Var.new( :name($result_var), :scope('lexical') ),
+            PAST::Val.new( :value('') ),
+        ),
+    );
+}
+
 
 sub make_smartmatch($/, $negated) {
     my $lhs := $/[0].ast;
